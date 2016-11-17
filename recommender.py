@@ -6,6 +6,7 @@ Created on Sat Nov 12 17:09:35 2016
 """
 
 
+
 from flask import Flask, jsonify, request
 from scikits.crab import datasets
 from sklearn.datasets.base import Bunch
@@ -30,7 +31,23 @@ try:
  
     engine = sqlalchemy.create_engine('mssql+pyodbc:///?odbc_connect=%s"' % params)
     
-    engine.execute("insert into antrak.dbo.recommender_customers_tb values ('John','UK'), ('John','UK'),('Elvis','UK'), ('John','US')")
+    #read in script where script is line by line without any temporary tables
+    for line in open(r"C:\Users\adaba\Documents\SQL Server Management Studio\recommender_system_script.sql","r"):
+        #print(line)
+        engine.execute(line)
+    
+    min_rating= []   
+    min = engine.execute("select min(rating) from antrak.dbo.recommender_rankings")
+    
+    #get mininum rating assign to the customer entered
+    for val in min:
+        min_rating.append(val)
+     
+    #convert to array   
+    min_arr= np.asarray(min_rating)  
+    
+    #insert the searching_customer details in the recommended table and assign the minimun rating to them
+    engine.execute("insert into antrak.dbo.recommender_rankings values ('John','UK',2), ('John','UK',2),('Elvis','UK',3), ('John','US',4)")
  
     #results.to_sql("clusterSegments", engine, if_exists = 'replace')#
     result = engine.execute("select * from antrak.dbo.recommender_rankings")
@@ -50,20 +67,7 @@ data_m = np.asarray(movies_data)
 import pandas as pd
 def load_sample_data():
 
-    #base_dir = join(dirname(__file__), 'data/')
-
-    #Read data
-    #data_m = np.loadtxt(csvcontent,
-    #data_m = np.loadtxt(movies_data,
-    #data_m = np.loadtxt(base_dir + 'sample_movies.csv',
-            #delimiter=';', dtype=str)
-    #for line in csvcontent.splitlines():
-        #data_m = str.parseLine(line)
-    #data_ini = csvcontent.split(";")
-    #data_m= np.loadtxt(data_ini, dtype = str)
-    #print(data_m)
-    #data_
-
+    
     item_ids = []
     user_ids = []
     data_songs = {}
@@ -146,6 +150,44 @@ def topNRecsUser(user_id, n):
     
 userrec = topNRecsUser(102,5)
 
+# get top N recommended countries along with the name of the user
+# @user_id : id of the customer to be recommended a product
+# @n: Number of recommendations to make , with the highest rated recommended products in top
+
+recditUser = {}
+def topNRecsUserName(user_name, n):
+    try:
+        int(user_name)
+        print("Please enter a valid String")
+    except ValueError:
+        print("Thanks for supplying name")
+    #user_id = list(movies.user_ids.keys())[list(movies.user_ids.values()).index("'"+ user_name +"'")]
+    user_id = list(movies.user_ids.keys())[list(movies.user_ids.values()).index(user_name)]
+    
+    #lets ingore the warnings
+    import warnings
+    warnings.filterwarnings('ignore')
+    
+    recditUser = {}
+    rec_items = recommender.recommend(user_id)
+    
+    #get top n ids
+    topN = rec_items[:n]
+    
+    #get the ids of all recommmended countries
+    rec_count_id = [item[0] for item in topN]
+    
+    #lets get the names of the top 5 recommended countries
+    rec_countries = [movies.item_ids[x] for x in rec_count_id]
+    recditUser['customer'] = movies.user_ids.get(user_id)
+    recditUser['recommended countries'] = rec_countries
+    
+    #recdit[movies.user_ids.get(user_id)] = rec_countries
+    
+    return recditUser
+    
+#topNRecsUserName('John', 5)    
+
 @app.route("/dbf2", methods=["GET"])
 def testDB():
     #Connect to databse#
@@ -218,8 +260,16 @@ def deleteOne(name):
 def recommend():
     return jsonify({'recommended':recdit})
     
+ 
 
-#lets retrieve the recommended destinations to our customer by the customer's name
+#lets retrieve the recommended destinations to our customer by the customer's name   
+#get recommendation for customer when you type customer's name
+@app.route("/recommender/<string:name>", methods=['GET'])
+def returnOneRecommend(name):
+    nameofcust = {}
+    nameofcust= topNRecsUserName(name, 5)
+    return jsonify({'recommended':nameofcust})
+
     
    
 if __name__ == '__main__':
